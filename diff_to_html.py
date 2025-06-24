@@ -26,16 +26,21 @@ body {
     font-size: 16px;
     font-weight: 600;
 }
-.file-item { 
-    padding: 8px 12px; 
-    cursor: pointer; 
-    border-radius: 4px; 
+.file-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    cursor: pointer;
+    border-radius: 4px;
     margin-bottom: 2px;
     transition: background-color 0.2s;
     color: #f0f6fc;
+    /* Ensure no wrapping */
+    white-space: nowrap;
 }
 .file-item:hover { background: #21262d; }
 .file-item.selected { background: #1f6feb; color: #ffffff; }
+.file-item.reviewed { background: #2d1f0a; }
 .diff-view { 
     flex: 1; 
     overflow-y: auto; 
@@ -96,6 +101,11 @@ th {
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+}
+.file-item-checkbox {
+    margin-right: 8px;
+    vertical-align: middle;
+    accent-color: #1f6feb;
 }
 </style>
 <script>
@@ -253,7 +263,11 @@ def render_html(files):
     for file_index, f in enumerate(files):
         file_id = f"file-{file_index}"
         filename = f["filename"]
-        html_parts.append(f'<div class="file-item" data-file="{file_id}" onclick="showFile(\'{file_id}\')">{html.escape(filename)}</div>')
+        html_parts.append(
+            f'<div class="file-item" data-file="{file_id}" onclick="showFile(\'{file_id}\')">'
+            f'<input type="checkbox" class="file-item-checkbox" onclick="event.stopPropagation();">'
+            f'{html.escape(filename)}</div>'
+        )
     
     html_parts.append('</div>')
     
