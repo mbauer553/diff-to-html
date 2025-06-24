@@ -78,7 +78,10 @@ tr.added { background: #0a2d0a; }
 tr.removed { background: #2d0a0a; }
 tr.unchanged { background: #161b22; }
 tr.changed { background: #2d1f0a; }
-tr:hover { background: #21262d; }
+tr.added:hover { background: #145c14; }
+tr.removed:hover { background: #7a2323; }
+tr.changed:hover { background: #7a5a23; }
+tr.unchanged:hover { background: #21262d; }
 td.lineno { 
     color: #7d8590; 
     width: 4em; 
@@ -106,6 +109,35 @@ th {
     margin-right: 8px;
     vertical-align: middle;
     accent-color: #1f6feb;
+}
+.folder-heading {
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.folder-heading .folder-arrow {
+    font-size: 12px;
+    transition: transform 0.2s;
+    width: 1em;
+    display: inline-block;
+    text-align: center;
+}
+.folder-heading.collapsed .folder-arrow {
+    /* No rotation, just change character via JS */
+}
+.folder-contents {
+    margin-left: 16px;
+}
+.folder-contents.collapsed {
+    display: none;
+}
+.folder-checkbox {
+    margin-right: 6px;
+    vertical-align: middle;
+    accent-color: #1f6feb;
+    pointer-events: none;
 }
 </style>
 <script>
@@ -157,6 +189,40 @@ function syncScroll() {
     newContainer.addEventListener('scroll', newContainer.scrollHandler);
 }
 
+function toggleFolder(elem) {
+    const heading = elem;
+    const contents = heading.nextElementSibling;
+    if (!contents) return;
+    const collapsed = contents.classList.toggle('collapsed');
+    heading.classList.toggle('collapsed', collapsed);
+    // Change arrow character
+    const arrow = heading.querySelector('.folder-arrow');
+    if (arrow) {
+        arrow.textContent = collapsed ? '\u25B6' : '\u25BC'; // ▶ or ▼
+    }
+}
+
+function updateFolderCheckboxes() {
+    // For each folder-heading, update its checkbox based on all descendant file checkboxes
+    document.querySelectorAll('.folder-heading').forEach(folder => {
+        const folderCheckbox = folder.querySelector('.folder-checkbox');
+        if (!folderCheckbox) return;
+        // Find all descendant file checkboxes
+        const folderContents = folder.nextElementSibling;
+        if (!folderContents) return;
+        const fileCheckboxes = folderContents.querySelectorAll('.file-item-checkbox');
+        if (fileCheckboxes.length === 0) {
+            folderCheckbox.checked = false;
+            return;
+        }
+        let allChecked = true;
+        fileCheckboxes.forEach(cb => {
+            if (!cb.checked) allChecked = false;
+        });
+        folderCheckbox.checked = allChecked;
+    });
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     // Show first file by default
     const firstFile = document.querySelector('.file-item');
@@ -164,6 +230,16 @@ document.addEventListener('DOMContentLoaded', function() {
         const fileId = firstFile.getAttribute('data-file');
         showFile(fileId);
     }
+    // Set all arrows to down (open) by default
+    document.querySelectorAll('.folder-heading .folder-arrow').forEach(arrow => {
+        arrow.textContent = '\u25BC'; // ▼
+    });
+    // Update folder checkboxes initially
+    updateFolderCheckboxes();
+    // Add event listeners to file checkboxes
+    document.querySelectorAll('.file-item-checkbox').forEach(cb => {
+        cb.addEventListener('change', updateFolderCheckboxes);
+    });
 });
 </script>
 '''
@@ -252,6 +328,54 @@ def side_by_side_rows(hunk_lines):
     return rows
 
 
+def build_dir_tree(files):
+    """
+    Build a nested dictionary representing the directory tree from a list of files.
+    Each node is a dict: { 'folders': {subfolder: node, ...}, 'files': [(file_index, filename), ...] }
+    """
+    root = {'folders': {}, 'files': []}
+    for file_index, f in enumerate(files):
+        path = f['filename']
+        parts = path.split('/')
+        node = root
+        for part in parts[:-1]:
+            if part not in node['folders']:
+                node['folders'][part] = {'folders': {}, 'files': []}
+            node = node['folders'][part]
+        node['files'].append((file_index, parts[-1]))
+    return root
+
+
+def render_dir_tree(node, parent_path=""):
+    html = []
+    # Render folders first
+    for folder in sorted(node['folders'].keys()):
+        folder_id = f"folder-{parent_path}/{folder}".replace('/', '_')
+        html.append(
+            f'<div class="folder-heading" onclick="toggleFolder(this)">' 
+            f'<input type="checkbox" class="folder-checkbox" tabindex="-1" aria-disabled="true">'
+            f'<span class="folder-arrow"></span>'
+            f'{html_escape(folder)}</div>'
+        )
+        html.append('<div class="folder-contents">')
+        html.append(render_dir_tree(node['folders'][folder], parent_path + '/' + folder))
+        html.append('</div>')
+    # Render files
+    for file_index, filename in node['files']:
+        file_id = f"file-{file_index}"
+        html.append(
+            f'<div class="file-item" data-file="{file_id}" onclick="showFile(\'{file_id}\')">'
+            f'<input type="checkbox" class="file-item-checkbox" onclick="event.stopPropagation();">'
+            f'{html_escape(filename)}</div>'
+        )
+    return ''.join(html)
+
+
+def html_escape(s):
+    import html
+    return html.escape(s)
+
+
 def render_html(files):
     html_parts = ["<html><head>", STYLE, "</head><body>"]
     html_parts.append('<div class="container">')
@@ -259,16 +383,8 @@ def render_html(files):
     # File explorer sidebar
     html_parts.append('<div class="file-explorer">')
     html_parts.append('<h2>Files</h2>')
-    
-    for file_index, f in enumerate(files):
-        file_id = f"file-{file_index}"
-        filename = f["filename"]
-        html_parts.append(
-            f'<div class="file-item" data-file="{file_id}" onclick="showFile(\'{file_id}\')">'
-            f'<input type="checkbox" class="file-item-checkbox" onclick="event.stopPropagation();">'
-            f'{html.escape(filename)}</div>'
-        )
-    
+    dir_tree = build_dir_tree(files)
+    html_parts.append(render_dir_tree(dir_tree))
     html_parts.append('</div>')
     
     # Diff view area
