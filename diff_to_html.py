@@ -15,10 +15,25 @@ body {
 .container { display: flex; height: 100vh; }
 .file-explorer { 
     width: 300px; 
+    min-width: 150px;
+    max-width: 600px;
     background: #161b22; 
     border-right: 1px solid #30363d; 
     overflow-y: auto;
     padding: 10px;
+    box-sizing: border-box;
+    transition: width 0.1s;
+}
+.resizer {
+    width: 6px;
+    cursor: ew-resize;
+    background: #22262d;
+    border-right: 1px solid #30363d;
+    z-index: 10;
+    position: relative;
+}
+.resizer:hover, .resizer.active {
+    background: #1f6feb;
 }
 .file-explorer h2 { 
     margin-top: 0; 
@@ -88,6 +103,8 @@ td.lineno {
     font-size: 12px;
     text-align: right;
     border-right: 1px solid #30363d;
+    user-select: none;
+    -webkit-user-select: none;
 }
 td.code { 
     white-space: pre; 
@@ -223,6 +240,10 @@ function updateFolderCheckboxes() {
     });
 }
 
+// Resizer logic for file explorer
+let isResizing = false;
+let startX = 0;
+let startWidth = 0;
 document.addEventListener('DOMContentLoaded', function() {
     // Show first file by default
     const firstFile = document.querySelector('.file-item');
@@ -240,6 +261,31 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.file-item-checkbox').forEach(cb => {
         cb.addEventListener('change', updateFolderCheckboxes);
     });
+    // Resizer logic
+    const resizer = document.getElementById('sidebar-resizer');
+    const sidebar = document.querySelector('.file-explorer');
+    if (resizer && sidebar) {
+        resizer.addEventListener('mousedown', function(e) {
+            isResizing = true;
+            startX = e.clientX;
+            startWidth = sidebar.offsetWidth;
+            resizer.classList.add('active');
+            document.body.style.cursor = 'ew-resize';
+        });
+        document.addEventListener('mousemove', function(e) {
+            if (!isResizing) return;
+            let newWidth = startWidth + (e.clientX - startX);
+            newWidth = Math.max(150, Math.min(600, newWidth));
+            sidebar.style.width = newWidth + 'px';
+        });
+        document.addEventListener('mouseup', function(e) {
+            if (isResizing) {
+                isResizing = false;
+                resizer.classList.remove('active');
+                document.body.style.cursor = '';
+            }
+        });
+    }
 });
 </script>
 '''
@@ -386,6 +432,8 @@ def render_html(files):
     dir_tree = build_dir_tree(files)
     html_parts.append(render_dir_tree(dir_tree))
     html_parts.append('</div>')
+    # Add resizer between sidebar and diff-view
+    html_parts.append('<div id="sidebar-resizer" class="resizer"></div>')
     
     # Diff view area
     html_parts.append('<div class="diff-view">')
