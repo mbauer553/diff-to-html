@@ -154,7 +154,6 @@ th {
     margin-right: 6px;
     vertical-align: middle;
     accent-color: #1f6feb;
-    pointer-events: none;
 }
 </style>
 <script>
@@ -260,6 +259,37 @@ document.addEventListener('DOMContentLoaded', function() {
     // Add event listeners to file checkboxes
     document.querySelectorAll('.file-item-checkbox').forEach(cb => {
         cb.addEventListener('change', updateFolderCheckboxes);
+    });
+    // Add event listeners to folder checkboxes for select/deselect all
+    document.querySelectorAll('.folder-checkbox').forEach(cb => {
+        cb.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const folderHeading = cb.closest('.folder-heading');
+            const folderContents = folderHeading.nextElementSibling;
+            if (!folderContents) return;
+            // Select all descendant file checkboxes recursively
+            const fileCheckboxes = folderContents.querySelectorAll('.file-item-checkbox');
+            fileCheckboxes.forEach(fcb => {
+                fcb.checked = cb.checked;
+            });
+            // Also select all descendant folder checkboxes recursively
+            const subfolderCheckboxes = folderContents.querySelectorAll('.folder-checkbox');
+            subfolderCheckboxes.forEach(subcb => {
+                if (subcb !== cb) subcb.checked = cb.checked;
+            });
+            updateFolderCheckboxes();
+        });
+    });
+    // Only toggle folder on arrow or name click
+    document.querySelectorAll('.folder-heading').forEach(heading => {
+        heading.querySelector('.folder-arrow').addEventListener('click', function(e) {
+            e.stopPropagation();
+            toggleFolder(heading);
+        });
+        heading.querySelector('.folder-name').addEventListener('click', function(e) {
+            e.stopPropagation();
+            toggleFolder(heading);
+        });
     });
     // Resizer logic
     const resizer = document.getElementById('sidebar-resizer');
@@ -398,10 +428,10 @@ def render_dir_tree(node, parent_path=""):
     for folder in sorted(node['folders'].keys()):
         folder_id = f"folder-{parent_path}/{folder}".replace('/', '_')
         html.append(
-            f'<div class="folder-heading" onclick="toggleFolder(this)">' 
-            f'<input type="checkbox" class="folder-checkbox" tabindex="-1" aria-disabled="true">'
-            f'<span class="folder-arrow"></span>'
-            f'{html_escape(folder)}</div>'
+            f'<div class="folder-heading">'
+            f'<input type="checkbox" class="folder-checkbox">'
+            f'<span class="folder-arrow" style="cursor:pointer;"></span>'
+            f'<span class="folder-name" style="cursor:pointer;">{html_escape(folder)}</span></div>'
         )
         html.append('<div class="folder-contents">')
         html.append(render_dir_tree(node['folders'][folder], parent_path + '/' + folder))
