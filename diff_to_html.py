@@ -456,10 +456,13 @@ def render_html(files):
     html_parts = ["<html><head>", STYLE, "</head><body>"]
     html_parts.append('<div class="container">')
     
+    # Only include files with at least one hunk (i.e., with changes)
+    changed_files = [f for f in files if f.get('hunks') and len(f['hunks']) > 0]
+    
     # File explorer sidebar
     html_parts.append('<div class="file-explorer">')
     html_parts.append('<h2>Files</h2>')
-    dir_tree = build_dir_tree(files)
+    dir_tree = build_dir_tree(changed_files)
     html_parts.append(render_dir_tree(dir_tree))
     html_parts.append('</div>')
     # Add resizer between sidebar and diff-view
@@ -468,7 +471,7 @@ def render_html(files):
     # Diff view area
     html_parts.append('<div class="diff-view">')
     
-    for file_index, f in enumerate(files):
+    for file_index, f in enumerate(changed_files):
         file_id = f"file-{file_index}"
         html_parts.append(f'<div id="diff-{file_id}" class="diff-section">')
         html_parts.append(f'<h2>{html.escape(f["filename"])}</h2>')
